@@ -1,0 +1,125 @@
+---
+title: "B5-Global_Change_Impact"
+author: "Ridwan Shittu"
+date: "2023-06-16"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: 
+      collapsed: false
+      smooth_scroll: false 
+    
+    
+
+---
+
+
+
+# Species distribution modeling of Culex pipiens in Germany
+## Objectives
+Model the bioclimatic niche of a species endemic to Europe and
+create a set of projections under a collection of climate change scenarios.
+A further objective is to measure the sensitivity of the species to climate
+change under the different scenarios.
+
+## Data
+This example relies on presence-only data downloaded from GBIF,
+which will then require the creation of a set, or several sets, of pseudoabsence
+data. The explanatory variables are raster grid data downloaded
+from the WorldClim datacenter.
+
+### Modeling Steps
+- Loading and formatting the presence- only data
+- Loading and formatting the raster data
+- Building a range of models and ensemble models using biomod2
+- Decomposing the models’ variability (predictive ability / predictions)
+- Projections under current and future conditions
+- Species’ range change estimates.
+
+
+```{r, message=FALSE, warning=FALSE}
+
+library(rgbif)
+library(biomod2)
+library(ggplot2)
+library(gridExtra)
+
+```
+
+
+## Obtaining Species Data from a Datacenter
+```{r specie data}
+culex_sp <- name_suggest(q='Culex pipiens', rank = 'species', limit=10000)
+culex_sp
+
+#(culex_sp <- culex_sp[grepl("^Culex pipiens", culex_sp$data$canonicalName), ])
+
+# find the taxonKey(usageKey)
+name_backbone('Culex pipiens')$usageKey 
+occ_search(scientificName = "Culex pipiens")
+
+
+
+```
+```{r}
+data <- occ_search(taxonKey = 1652991, country="DE", fields = "minimal")
+# data <- occ_search(taxonKey = 1652991, country="DE", fields = "minimal", limit=2000)
+
+#data$data$scientificName <- sub(" ", ".", data$data$scientificName ) # not 
+#(culex_occ <- unique(data$data$scientificName))
+
+#total number of occurrence
+sort(table(data$data$scientificName), decreasing = T)
+
+```
+## Environmental Data 
+```{r}
+# get WorldClim environmental variables
+
+dir.create("WorldClim_data", showWarnings = F)
+library(geodata)
+?geodata
+
+
+WC20<- worldclim_global(var="bioc", res = 10, path=paste0(getwd(),"/WorldClim_data/"))
+
+#load the future datasets # explain the features 
+GCM70 <-cmip6_world("MPI-ESM1-2-LR", "585", "2061-2080", var="bioc", res=10, path=paste0(getwd(),"/WorldClim_data/"))
+
+GCM50 <-cmip6_world("MPI-ESM1-2-LR", "585", "2041-2060", var="bioc", res=10, path=paste0(getwd(),"/WorldClim_data/")) 
+
+
+list.files("WorldClim_data/")
+list.files("WorldClim_data/wc2.1_10m/")
+
+```
+## Environmental variable selection
+
+```{r}
+head(data$data)
+culex_occ=data$data
+head(culex_occ)
+colnames(culex_occ)
+unique(culex_occ$scientificName)
+culex_occ <- culex_occ[culex_occ$scientificName=="Culex pipiens Linnaeus, 1758", ]
+
+dim(culex_occ)
+
+
+library(gtools)
+
+#stack the environmental variables
+bioclim_world <-list.files("WorldClim_data/wc2.1_10m/", patter="bio_", full.names = T)
+bioclim_world <- mixedsort(bioclim_world )
+bioclim_world <- raster::stack(bioclim_world)
+
+
+# download germany boundaries
+DE <- gadm(country="Germany", level=0, resolution = 1, version="4.1",  path=paste0(getwd(),"/WorldClim_data/"))
+plot(DE)
+class(DE)
+class(bioclim_world)
+bioclim_DE <- raster::crop(bioclim_world, DE)
+```
+
